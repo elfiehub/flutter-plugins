@@ -995,6 +995,10 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                             ),
                     "source_id" to dataPoint.originalDataSource.streamIdentifier,
                 ))
+
+                if (dataType == HealthDataTypes.TYPE_BLOOD_GLUCOSE) {
+                    glucoseDataHandler(dataPoint, healthData)
+                }
             }
 //            val healthData = dataSet.dataPoints.mapIndexed { _, dataPoint ->
 //                return@mapIndexed
@@ -1002,6 +1006,23 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
 
             Handler(context!!.mainLooper).run { result.success(healthData) }
         }
+
+    private fun glucoseDataHandler(dataPoint: DataPoint, healthData: ArrayList<HashMap<String, Any?>>) {
+        val mealType = getHealthDataValue(dataPoint, HealthFields.FIELD_TEMPORAL_RELATION_TO_MEAL)
+        var mealTypeString = ""
+        if(mealType == HealthFields.FIELD_TEMPORAL_RELATION_TO_MEAL_FASTING){
+            mealTypeString = "fasting"
+        }else if(mealType == HealthFields.FIELD_TEMPORAL_RELATION_TO_MEAL_AFTER_MEAL){
+            mealTypeString = "post-meal"
+        }else{
+            mealTypeString = "pre-meal"
+        }
+        healthData.add(
+            hashMapOf(
+                "extras" to hashMapOf("mealType" to mealTypeString)
+            )
+        )
+    }
 
     private fun errHandler(result: Result, addMessage: String) = OnFailureListener { exception ->
         Handler(context!!.mainLooper).run { result.success(null) }
