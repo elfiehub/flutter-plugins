@@ -23,7 +23,7 @@ class HealthDataPoint {
       this._deviceId,
       this._sourceId,
       this._sourceName,
-      {this.extras}) {
+      this.extras) {
     // set the value to minutes rather than the category
     // returned by the native API
     if (type == HealthDataType.MINDFULNESS ||
@@ -74,7 +74,7 @@ class HealthDataPoint {
         json['device_id'],
         json['source_id'],
         json['source_name'],
-        extras: json['extras']);
+        json['extras']);
   }
 
   /// Converts the [HealthDataPoint] to a json object

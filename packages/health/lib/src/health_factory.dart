@@ -204,7 +204,9 @@ class HealthFactory {
           _platformType,
           _deviceId!,
           '',
-          '');
+          '',
+          null
+      );
 
       bmiHealthPoints.add(x);
     }
@@ -389,8 +391,7 @@ class HealthFactory {
 
   /// Fetch a list of health data points based on [types].
   Future<List<HealthDataPoint>> getHealthDataFromTypes(DateTime startTime, DateTime endTime, List<HealthDataType> types,
-      {bool allowEnteredData = true}  
-      ) async {
+      {bool allowEnteredData = true}) async {
     List<HealthDataPoint> dataPoints = [];
 
     for (var type in types) {
@@ -410,8 +411,7 @@ class HealthFactory {
 
   /// Prepares a query, i.e. checks if the types are available, etc.
   Future<List<HealthDataPoint>> _prepareQuery(DateTime startTime, DateTime endTime, HealthDataType dataType,
-      {bool allowEnteredData = true}  
-      ) async {
+      {bool allowEnteredData = true}) async {
     // Ask for device ID only once
     _deviceId ??= _platformType == PlatformType.ANDROID
         ? (await _deviceInfo.androidInfo).id
@@ -427,14 +427,13 @@ class HealthFactory {
       return _computeAndroidBMI(startTime, endTime);
     }
     return await _dataQuery(startTime, endTime, dataType
-        , allowEnteredData  
+        , allowEnteredData
     );
   }
 
   /// Fetches data points from Android/iOS native code.
   Future<List<HealthDataPoint>> _dataQuery(DateTime startTime, DateTime endTime, HealthDataType dataType
-      , bool allowEnteredData  
-      ) async {
+      , bool allowEnteredData) async {
     final args = <String, dynamic>{
       'dataTypeKey': dataType.name,
       'dataUnitKey': _dataTypeToUnit[dataType]!.name,
@@ -484,16 +483,18 @@ class HealthFactory {
       final DateTime to = DateTime.fromMillisecondsSinceEpoch(e['date_to']);
       final String sourceId = e["source_id"];
       final String sourceName = e["source_name"];
+      final Map<String, dynamic> extras =  Map<String, dynamic>.from(e["extras"]??{}) ;
       return HealthDataPoint(
-        value,
-        dataType,
-        unit,
-        from,
-        to,
-        _platformType,
-        device,
-        sourceId,
-        sourceName,
+          value,
+          dataType,
+          unit,
+          from,
+          to,
+          _platformType,
+          device,
+          sourceId,
+          sourceName,
+          extras
       );
     }).toList();
 

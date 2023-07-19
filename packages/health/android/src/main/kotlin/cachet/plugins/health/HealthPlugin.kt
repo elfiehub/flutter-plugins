@@ -47,7 +47,6 @@ import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.*
 import androidx.health.connect.client.request.AggregateRequest
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import java.time.temporal.ChronoUnit
 
@@ -919,6 +918,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         ),
                     )
             }
+
             DataType.TYPE_ACTIVITY_SEGMENT -> {
                 val readRequest: SessionReadRequest
                 val readRequestBuilder = SessionReadRequest.Builder()
@@ -948,6 +948,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                         ),
                     )
             }
+
             else -> {
                 Fitness.getHistoryClient(context!!.applicationContext, googleSignInAccount)
                     .readData(
@@ -981,8 +982,8 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 if (streamData.contains("user_input") && !allowEnteredData) {
                     continue
                 }
-                Log.i("TCV","streamData "+streamData)
-                healthData.add(hashMapOf(
+                Log.i("TCV", "streamData " + streamData)
+                val healthDataHashMap: HashMap<String, Any?> = hashMapOf(
                     "value" to getHealthDataValue(dataPoint, field),
                     "date_from" to dataPoint.getStartTime(TimeUnit.MILLISECONDS),
                     "date_to" to dataPoint.getEndTime(TimeUnit.MILLISECONDS),
@@ -994,11 +995,14 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                                         )
                             ),
                     "source_id" to dataPoint.originalDataSource.streamIdentifier,
-                ))
+                )
 
                 if (dataType == HealthDataTypes.TYPE_BLOOD_GLUCOSE) {
-                    glucoseDataHandler(dataPoint, healthData)
+                    glucoseDataHandler(dataPoint, healthDataHashMap)
                 }
+
+                healthData.add(healthDataHashMap)
+
             }
 //            val healthData = dataSet.dataPoints.mapIndexed { _, dataPoint ->
 //                return@mapIndexed
@@ -1007,21 +1011,17 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
             Handler(context!!.mainLooper).run { result.success(healthData) }
         }
 
-    private fun glucoseDataHandler(dataPoint: DataPoint, healthData: ArrayList<HashMap<String, Any?>>) {
+    private fun glucoseDataHandler(dataPoint: DataPoint, healthDataHashMap: HashMap<String, Any?>) {
         val mealType = getHealthDataValue(dataPoint, HealthFields.FIELD_TEMPORAL_RELATION_TO_MEAL)
         var mealTypeString = ""
-        if(mealType == HealthFields.FIELD_TEMPORAL_RELATION_TO_MEAL_FASTING){
+        if (mealType == HealthFields.FIELD_TEMPORAL_RELATION_TO_MEAL_FASTING) {
             mealTypeString = "fasting"
-        }else if(mealType == HealthFields.FIELD_TEMPORAL_RELATION_TO_MEAL_AFTER_MEAL){
+        } else if (mealType == HealthFields.FIELD_TEMPORAL_RELATION_TO_MEAL_AFTER_MEAL) {
             mealTypeString = "post-meal"
-        }else{
+        } else {
             mealTypeString = "pre-meal"
         }
-        healthData.add(
-            hashMapOf(
-                "extras" to hashMapOf("mealType" to mealTypeString)
-            )
-        )
+        healthDataHashMap["extras"] = hashMapOf("mealType" to mealTypeString)
     }
 
     private fun errHandler(result: Result, addMessage: String) = OnFailureListener { exception ->
