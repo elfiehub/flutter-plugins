@@ -12,7 +12,7 @@ class HealthDataPoint {
   String _deviceId;
   String _sourceId;
   String _sourceName;
-  Map<String, dynamic>? _extras;
+  Map<String, dynamic>? extras;
 
   HealthDataPoint(this._value,
       this._type,
@@ -23,8 +23,7 @@ class HealthDataPoint {
       this._deviceId,
       this._sourceId,
       this._sourceName,
-      this._extras,
-      ) {
+      {this.extras}) {
     // set the value to minutes rather than the category
     // returned by the native API
     if (type == HealthDataType.MINDFULNESS ||
@@ -75,7 +74,7 @@ class HealthDataPoint {
         json['device_id'],
         json['source_id'],
         json['source_name'],
-        json['extras']);
+        extras: json['extras']);
   }
 
   /// Converts the [HealthDataPoint] to a json object
@@ -90,7 +89,7 @@ class HealthDataPoint {
         'device_id': deviceId,
         'source_id': sourceId,
         'source_name': sourceName,
-        'extras': _extras
+        'extras': extras
       };
 
   @override
@@ -137,9 +136,6 @@ class HealthDataPoint {
 
   /// The name of the source from which the data point was fetched.
   String get sourceName => _sourceName;
-
-  /// The name of the source from which the data point was fetched.
-  Map<String, dynamic>? get extras => _extras;
 
   @override
   bool operator ==(Object o) {
