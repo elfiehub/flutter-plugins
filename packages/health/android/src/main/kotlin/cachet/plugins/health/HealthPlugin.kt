@@ -47,6 +47,8 @@ import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.*
 import androidx.health.connect.client.request.AggregateRequest
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import java.time.temporal.ChronoUnit
 
 const val GOOGLE_FIT_PERMISSIONS_REQUEST_CODE = 1111
@@ -878,6 +880,8 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
         val type = call.argument<String>("dataTypeKey")!!
         val startTime = call.argument<Long>("startTime")!!
         val endTime = call.argument<Long>("endTime")!!
+        val allowEnteredData = call.argument<Boolean>("allowEnteredData") ?: true
+
         // Look up data type and unit for the type key
         val dataType = keyToHealthDataType(type)
         val field = getField(type)
@@ -954,7 +958,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                     )
                     .addOnSuccessListener(
                         threadPoolExecutor!!,
-                        dataHandler(dataType, field, result),
+                        dataHandler(dataType, field, result, allowEnteredData),
                     )
                     .addOnFailureListener(
                         errHandler(
@@ -966,26 +970,36 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
         }
     }
 
-    private fun dataHandler(dataType: DataType, field: Field, result: Result) =
+    private fun dataHandler(dataType: DataType, field: Field, result: Result, allowEnteredData: Boolean) =
         OnSuccessListener { response: DataReadResponse ->
             // / Fetch all data points for the specified DataType
             val dataSet = response.getDataSet(dataType)
             // / For each data point, extract the contents and send them to Flutter, along with date and unit.
-            val healthData = dataSet.dataPoints.mapIndexed { _, dataPoint ->
-                return@mapIndexed hashMapOf(
+            val healthData = ArrayList<HashMap<String, Any?>>()
+            for (dataPoint in dataSet.dataPoints) {
+                val streamData = dataPoint.originalDataSource.streamIdentifier
+                if (streamData.contains("user_input") && !allowEnteredData) {
+                    continue
+                }
+                Log.i("TCV","streamData "+streamData)
+                healthData.add(hashMapOf(
                     "value" to getHealthDataValue(dataPoint, field),
                     "date_from" to dataPoint.getStartTime(TimeUnit.MILLISECONDS),
                     "date_to" to dataPoint.getEndTime(TimeUnit.MILLISECONDS),
                     "source_name" to (
-                        dataPoint.originalDataSource.appPackageName
-                            ?: (
-                                dataPoint.originalDataSource.device?.model
-                                    ?: ""
-                                )
-                        ),
+                            dataPoint.originalDataSource.appPackageName
+                                ?: (
+                                        dataPoint.originalDataSource.device?.model
+                                            ?: ""
+                                        )
+                            ),
                     "source_id" to dataPoint.originalDataSource.streamIdentifier,
-                )
+                ))
             }
+//            val healthData = dataSet.dataPoints.mapIndexed { _, dataPoint ->
+//                return@mapIndexed
+//            }
+
             Handler(context!!.mainLooper).run { result.success(healthData) }
         }
 
@@ -1036,12 +1050,12 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                                             "date_to" to dataPoint.getEndTime(TimeUnit.MILLISECONDS),
                                             "unit" to "MINUTES",
                                             "source_name" to (
-                                                dataPoint.originalDataSource.appPackageName
-                                                    ?: (
-                                                        dataPoint.originalDataSource.device?.model
-                                                            ?: "unknown"
-                                                        )
-                                                ),
+                                                    dataPoint.originalDataSource.appPackageName
+                                                        ?: (
+                                                                dataPoint.originalDataSource.device?.model
+                                                                    ?: "unknown"
+                                                                )
+                                                    ),
                                             "source_id" to dataPoint.originalDataSource.streamIdentifier,
                                         ),
                                     )
@@ -1079,12 +1093,12 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                                         "date_to" to dataPoint.getEndTime(TimeUnit.MILLISECONDS),
                                         "unit" to "MINUTES",
                                         "source_name" to (
-                                            dataPoint.originalDataSource.appPackageName
-                                                ?: (
-                                                    dataPoint.originalDataSource.device?.model
-                                                        ?: "unknown"
-                                                    )
-                                            ),
+                                                dataPoint.originalDataSource.appPackageName
+                                                    ?: (
+                                                            dataPoint.originalDataSource.device?.model
+                                                                ?: "unknown"
+                                                            )
+                                                ),
                                         "source_id" to dataPoint.originalDataSource.streamIdentifier,
                                     ),
                                 )
@@ -1120,9 +1134,9 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                 healthData.add(
                     hashMapOf(
                         "workoutActivityType" to (
-                            workoutTypeMap.filterValues { it == session.activity }.keys.firstOrNull()
-                                ?: "OTHER"
-                            ),
+                                workoutTypeMap.filterValues { it == session.activity }.keys.firstOrNull()
+                                    ?: "OTHER"
+                                ),
                         "totalEnergyBurned" to if (totalEnergyBurned == 0.0) null else totalEnergyBurned,
                         "totalEnergyBurnedUnit" to "KILOCALORIE",
                         "totalDistance" to if (totalDistance == 0.0) null else totalDistance,
@@ -1257,17 +1271,35 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
             result.success(false)
             return
         }
+//        Fitness
+
         Fitness.getConfigClient(activity!!, GoogleSignIn.getLastSignedInAccount(context!!)!!)
             .disableFit()
-            .addOnSuccessListener {
-                Log.i("Health", "Disabled Google Fit")
-                result.success(true)
+            .continueWithTask {
+                val signInOptions = GoogleSignInOptions.Builder()
+                    .addExtension(FitnessOptions.builder().build())
+                    .build()
+
+                GoogleSignIn.getClient(activity!!, signInOptions).revokeAccess()
             }
-            .addOnFailureListener { e ->
-                Log.w("Health", "There was an error disabling Google Fit", e)
+            .addOnSuccessListener { result.success(true) }
+            .addOnFailureListener {
                 result.success(false)
             }
+//            .disableFit()
+//            .addOnSuccessListener {
+//                Log.i("Health", "Disabled Google Fit")
+//                result.success(true)
+//            }
+//            .addOnFailureListener { e ->
+//                Log.w("Health", "There was an error disabling Google Fit", e)
+//                result.success(false)
+//            }
     }
+
+//    private fun isAuthorized(): Boolean {
+//        return GoogleSignIn.hasPermissions(getFitnessAccount(), getFitnessOptions())
+//    }
 
     private fun getTotalStepsInInterval(call: MethodCall, result: Result) {
         val start = call.argument<Long>("startTime")!!
@@ -1582,9 +1614,9 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
                             // mapOf(
                             mapOf<String, Any?>(
                                 "workoutActivityType" to (
-                                    workoutTypeMapHealthConnect.filterValues { it == record.exerciseType }.keys.firstOrNull()
-                                        ?: "OTHER"
-                                    ),
+                                        workoutTypeMapHealthConnect.filterValues { it == record.exerciseType }.keys.firstOrNull()
+                                            ?: "OTHER"
+                                        ),
                                 "totalDistance" to if (totalDistance == 0.0) null else totalDistance,
                                 "totalDistanceUnit" to "METER",
                                 "totalEnergyBurned" to if (totalEnergyBurned == 0.0) null else totalEnergyBurned,

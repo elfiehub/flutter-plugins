@@ -13,8 +13,7 @@ class HealthDataPoint {
   String _sourceId;
   String _sourceName;
 
-  HealthDataPoint(
-      this._value,
+  HealthDataPoint(this._value,
       this._type,
       this._unit,
       this._dateFrom,
@@ -76,7 +75,8 @@ class HealthDataPoint {
   }
 
   /// Converts the [HealthDataPoint] to a json object
-  Map<String, dynamic> toJson() => {
+  Map<String, dynamic> toJson() =>
+      {
         'value': value.toJson(),
         'data_type': type.name,
         'unit': unit.name,
@@ -148,6 +148,25 @@ class HealthDataPoint {
   }
 
   @override
-  int get hashCode => Object.hash(value, unit, dateFrom, dateTo, type, platform,
-      deviceId, sourceId, sourceName);
+  int get hashCode =>
+      Object.hash(
+          value,
+          unit,
+          dateFrom,
+          dateTo,
+          type,
+          platform,
+          deviceId,
+          sourceId,
+          sourceName);
+
+  void addValue(num value) {
+    if (_value is NumericHealthValue) {
+      _value = NumericHealthValue((_value as NumericHealthValue).numericValue + value);
+    }
+  }
+
+  void updateToDate(DateTime dateTo) {
+    _dateTo = dateTo;
+  }
 }

@@ -173,9 +173,37 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
     else if call.method.elementsEqual("delete") {
       try! delete(call: call, result: result)
     }
-
+      
+    // Handle check if need to grant permission
+    else if (call.method.elementsEqual("checkIfNeedToRequestAuthorization")) {
+        checkIfNeedToRequestAuthorization(call: call, result: result)
+    }
   }
+    
+  func checkIfNeedToRequestAuthorization(call: FlutterMethodCall, result: @escaping FlutterResult) {
+      checkStepsData() { (hasData) -> () in
+          result(hasData)
+      }
+  }
+    
+  func checkStepsData(completion: @escaping (Bool) -> Void) {
+        let dataType = dataTypeLookUp(key: STEPS)
 
+        let query = HKSampleQuery(sampleType: dataType, predicate: nil, limit: 1, sortDescriptors: []) {
+            x, samplesOrNil, error in
+            guard let samples = samplesOrNil as? [HKQuantitySample] else {
+                guard let samplesCategory = samplesOrNil as? [HKCategorySample] else {
+                    completion(false)
+                    return;
+                }
+                completion(samplesCategory.count > 0)
+                return
+            }
+            completion(samples.count > 0)
+        }
+        HKHealthStore().execute(query)
+    }
+    
   func checkIfHealthDataAvailable(call: FlutterMethodCall, result: @escaping FlutterResult) {
     result(HKHealthStore.isHealthDataAvailable())
   }
@@ -474,6 +502,7 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
     let startTime = (arguments?["startTime"] as? NSNumber) ?? 0
     let endTime = (arguments?["endTime"] as? NSNumber) ?? 0
     let limit = (arguments?["limit"] as? Int) ?? HKObjectQueryNoLimit
+    let allowEnteredData = (arguments?["allowEnteredData"] as? Bool) ?? false
 
 
     // Convert dates from milliseconds to Date()
@@ -488,10 +517,14 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
 
     let predicate = HKQuery.predicateForSamples(
       withStart: dateFrom, end: dateTo, options: .strictStartDate)
+    let ignoreManualDataPredicate = NSPredicate(format: "metadata.%K != YES", HKMetadataKeyWasUserEntered)
+    let compoundPredicate = NSCompoundPredicate(type: .and, subpredicates: [predicate, ignoreManualDataPredicate])
     let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
 
     let query = HKSampleQuery(
-      sampleType: dataType, predicate: predicate, limit: limit, sortDescriptors: [sortDescriptor]
+      sampleType: dataType,
+      predicate:allowEnteredData ? predicate : compoundPredicate,
+      limit: limit, sortDescriptors: [sortDescriptor]
     ) {
       [self]
       x, samplesOrNil, error in
